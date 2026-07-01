@@ -563,6 +563,8 @@ const FACILITY_SEED = [
 // ▼ Supabaseに接続する場合は下の2つを設定（anon keyはRLSで保護される公開鍵なので埋め込みOK）
 const SUPABASE_URL = 'https://ghuoehblmoizcpnydavw.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_Mcu9bdALsckDzWq2CfG7Cg_1h4h28UZ'; // publishable(公開)キー
+// パスワード再設定メールの戻り先（公開URL）。ここを固定すると、どの画面からリクエストしても必ず公開URLに戻る。空なら現在のURLを使う
+const APP_URL = 'https://picagomi.github.io/space-reserve/';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
 let sb = null;
 
@@ -661,7 +663,7 @@ async function sendReset(){
   const email=$('resetEmail').value.trim();
   if(!email){ toast('メールアドレスを入力してください'); return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('メールアドレスの形式が正しくありません'); return; }
-  const redirectTo=location.origin+location.pathname;
+  const redirectTo=APP_URL || (location.origin+location.pathname);
   const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
   if(error){ toast('送信に失敗しました：'+error.message); return; }
   toast('再設定リンクを送信しました。メールをご確認ください');
