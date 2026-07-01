@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpaceReserve｜会議室・スペース予約</title>
+<!-- Supabaseに接続する場合のみ使用（未接続でもエラーにならない） -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --rose:#b5687f;
+    --rose-dark:#9a5269;
+    --rose-light:#f3e3e8;
+    --rose-bg:#fcf7f8;
+    --ink:#3a3338;
+    --muted:#8b8086;
+    --line:#ece4e7;
+    --ok:#3f9d77;
+    --busy:#d9c0c8;
+    --white:#fff;
+    --shadow:0 6px 24px rgba(120,80,95,.10);
+    --radius:16px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif;
+    color:var(--ink);background:var(--rose-bg);line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  button{font-family:inherit;cursor:pointer;border:none}
+
+  /* ---------- Header ---------- */
+  header{
+    position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+  }
+  .nav{max-width:1080px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.02em;cursor:pointer}
+  .logo .mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--rose),#d39bab);display:grid;place-items:center;color:#fff;font-size:18px}
+  .logo small{display:block;font-size:11px;color:var(--muted);font-weight:500;letter-spacing:.1em}
+  .nav-actions{display:flex;gap:8px}
+  .nav-btn{background:transparent;color:var(--rose-dark);font-size:14px;font-weight:600;padding:8px 14px;border-radius:10px;transition:.15s;white-space:nowrap}
+  .nav-btn:hover{background:var(--rose-light)}
+  .nav-btn.primary{background:var(--rose);color:#fff}
+  .nav-btn.primary:hover{background:var(--rose-dark)}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+
+  /* ---------- Hero ---------- */
+  .hero{
+    background:linear-gradient(135deg,#fff,#fbeef2);border-radius:24px;padding:40px 36px;
+    box-shadow:var(--shadow);margin-bottom:32px;position:relative;overflow:hidden;
+  }
+  .hero h1{font-size:30px;line-height:1.35;margin-bottom:10px}
+  .hero p{color:var(--muted);max-width:560px}
+  .hero .deco{position:absolute;right:-40px;top:-40px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,rgba(181,104,127,.14),transparent 70%)}
+
+  /* ---------- Steps ---------- */
+  .steps{display:flex;gap:6px;margin-bottom:26px;flex-wrap:wrap}
+  .step{flex:1;min-width:120px;display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:13px;color:var(--muted)}
+  .step .n{width:24px;height:24px;border-radius:50%;background:var(--line);color:var(--muted);display:grid;place-items:center;font-weight:700;font-size:12px;flex-shrink:0}
+  .step.active{border-color:var(--rose);color:var(--rose-dark);font-weight:600;box-shadow:var(--shadow)}
+  .step.active .n{background:var(--rose);color:#fff}
+  .step.done .n{background:var(--ok);color:#fff}
+
+  .section-title{font-size:20px;margin-bottom:4px}
+  .section-sub{color:var(--muted);font-size:14px;margin-bottom:20px}
+
+  /* ---------- Facility grid ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px}
+  .card{background:#fff;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--line);transition:.18s;display:flex;flex-direction:column}
+  .card:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(120,80,95,.16)}
+  .card .photo{height:150px;display:grid;place-items:center;font-size:54px;color:#fff}
+  .card .body{padding:16px 18px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .card h3{font-size:17px}
+  .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:11px;background:var(--rose-light);color:var(--rose-dark);padding:3px 9px;border-radius:20px;font-weight:600}
+  .meta{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+  .price{font-size:18px;font-weight:700;color:var(--rose-dark)}
+  .price small{font-size:12px;font-weight:500;color:var(--muted)}
+  .btn{background:var(--rose);color:#fff;padding:11px 16px;border-radius:11px;font-weight:600;font-size:14px;text-align:center;transition:.15s;width:100%;margin-top:auto}
+  .btn:hover{background:var(--rose-dark)}
+  .btn.ghost{background:#fff;color:var(--rose-dark);border:1px solid var(--rose)}
+  .btn.ghost:hover{background:var(--rose-light)}
+  .btn.sm{width:auto;padding:8px 16px}
+  .btn:disabled{background:var(--line);color:var(--muted);cursor:not-allowed}
+
+  /* ---------- Toolbar (search / filter / sort) ---------- */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .toolbar .search{position:relative;flex:1;min-width:200px}
+  .toolbar .search input{padding-left:38px}
+  .toolbar .search::before{content:'🔍';position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:14px;opacity:.55;pointer-events:none}
+  .toolbar select{width:auto;min-width:130px;cursor:pointer}
+  .result-count{font-size:13px;color:var(--muted);margin-bottom:16px}
+  .result-count b{color:var(--ink)}
+
+  /* store chips (chain) */
+  .store-chips{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px}
+  .store-chip{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:10px 15px;border:1px solid var(--line);border-radius:14px;background:#fff;transition:.15s;text-align:left;min-width:max-content}
+  .store-chip:hover{border-color:var(--rose)}
+  .store-chip.active{border-color:var(--rose);background:var(--rose-light);box-shadow:var(--shadow)}
+  .store-chip .ico{font-size:22px}
+  .store-chip .txt{display:flex;flex-direction:column;line-height:1.25}
+  .store-chip .txt b{font-size:14px;color:var(--ink)}
+  .store-chip .txt small{font-size:11px;color:var(--muted)}
+  .store-chip.active .txt b{color:var(--rose-dark)}
+  .store-badge{display:inline-block;font-size:11px;font-weight:700;color:var(--rose-dark);background:var(--rose-light);padding:3px 9px;border-radius:20px;align-self:flex-start}
+
+  /* card extras */
+  .card .photo{position:relative}
+  .floor{position:absolute;left:12px;bottom:10px;font-size:11px;font-weight:700;color:#fff;background:rgba(0,0,0,.28);padding:3px 10px;border-radius:20px;backdrop-filter:blur(4px)}
+  .rating{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#d98a00;flex-wrap:wrap}
+  .rating .rev{color:var(--muted);font-weight:500}
+  .avail{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;margin-left:auto}
+  .avail.ok{background:#e5f3ec;color:var(--ok)}
+  .avail.full{background:#f0ecee;color:var(--muted)}
+
+  /* ---------- Admin ---------- */
+  .admin-tabs{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+  .admin-tabs button{background:#fff;border:1px solid var(--line);color:var(--muted);font-weight:600;font-size:14px;padding:9px 18px;border-radius:10px;transition:.15s}
+  .admin-tabs button:hover{border-color:var(--rose)}
+  .admin-tabs button.active{background:var(--rose);color:#fff;border-color:var(--rose)}
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:15px 18px;box-shadow:var(--shadow)}
+  .stat .label{font-size:12px;color:var(--muted)}
+  .stat .num{font-size:23px;font-weight:700;color:var(--rose-dark);margin-top:2px}
+  .admin-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+  .admin-filters select,.admin-filters input{width:auto;min-width:150px}
+  table.tbl{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:var(--shadow);font-size:13px}
+  table.tbl th{background:var(--rose-light);color:var(--rose-dark);text-align:left;padding:11px 12px;font-weight:700;white-space:nowrap}
+  table.tbl td{padding:11px 12px;border-top:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+  table.tbl tr:hover td{background:var(--rose-bg)}
+  .tbl-wrap,.cal-wrap{overflow-x:auto}
+  .mini-btn{font-size:12px;padding:6px 12px;border-radius:8px;background:#fff;border:1px solid var(--rose);color:var(--rose-dark);font-weight:600;transition:.15s}
+  .mini-btn:hover{background:var(--rose-light)}
+  .mini-btn.danger{border-color:#d68b9b;color:#c0506a}
+  .mini-btn.danger:hover{background:#fbeef1}
+  table.cal{border-collapse:collapse;font-size:12px;background:#fff;min-width:640px;margin-top:6px}
+  table.cal th,table.cal td{border:1px solid var(--line);padding:6px 5px;text-align:center;white-space:nowrap}
+  table.cal th{background:var(--rose-light);color:var(--rose-dark);font-weight:700}
+  table.cal td.facname{background:#faf5f6;font-weight:700;text-align:left;color:var(--ink);position:sticky;left:0;z-index:1}
+  table.cal td.booked{background:var(--rose);color:#fff;font-weight:600;font-size:11px}
+  table.cal td.closed{background:#f3eef0;color:#cdbfc6}
+  table.cal td.free{color:#d8ccd1}
+  .fac-list .fac-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:#fff}
+  .fac-row .ph{width:46px;height:46px;border-radius:10px;display:grid;place-items:center;font-size:22px;color:#fff;flex-shrink:0}
+  .fac-row .info{flex:1;min-width:0}
+  .fac-row .info h4{font-size:15px}
+  .fac-row .info .meta{font-size:12px;color:var(--muted)}
+  .fac-row .acts{display:flex;gap:6px;flex-shrink:0}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap}
+  .swatches button{width:38px;height:38px;border-radius:10px;border:2px solid transparent;cursor:pointer}
+  .swatches button.sel{border-color:var(--ink);box-shadow:0 0 0 2px #fff inset}
+
+  /* ---------- Panel ---------- */
+  .panel{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--line);padding:24px}
+  .panel + .panel{margin-top:18px}
+  .back{background:none;color:var(--muted);font-size:14px;margin-bottom:14px;padding:4px 0}
+  .back:hover{color:var(--rose-dark)}
+
+  .summary{display:flex;gap:16px;align-items:center;padding:16px;background:var(--rose-bg);border-radius:12px;margin-bottom:22px}
+  .summary .ph{width:64px;height:64px;border-radius:12px;display:grid;place-items:center;font-size:30px;color:#fff;flex-shrink:0}
+  .summary h3{font-size:17px}
+  .summary .meta{font-size:13px}
+
+  /* ---------- Date picker ---------- */
+  .field{margin-bottom:18px}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+  .field .hint{font-weight:400;color:var(--muted);font-size:12px}
+  input,select,textarea{
+    width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:10px;font-size:15px;
+    font-family:inherit;color:var(--ink);background:#fff;transition:.15s;
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--rose);box-shadow:0 0 0 3px var(--rose-light)}
+  .date-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+  .date-chip{flex-shrink:0;min-width:64px;text-align:center;padding:10px 8px;border-radius:12px;border:1px solid var(--line);background:#fff;transition:.15s}
+  .date-chip:hover{border-color:var(--rose)}
+  .date-chip.active{background:var(--rose);color:#fff;border-color:var(--rose)}
+  .date-chip .dow{font-size:11px;display:block}
+  .date-chip .d{font-size:18px;font-weight:700;display:block}
+  .date-chip .m{font-size:10px;display:block;opacity:.8}
+  .date-chip.sun{color:#c0506a}
+  .date-chip.sat{color:#5478b0}
+  .date-chip.active.sun,.date-chip.active.sat{color:#fff}
+
+  /* ---------- Time slots ---------- */
+  .slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-top:6px}
+  .slot{padding:11px 4px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:14px;font-weight:600;text-align:center;transition:.12s;position:relative}
+  .slot:hover:not(:disabled){border-color:var(--rose);color:var(--rose-dark)}
+  .slot.sel{background:var(--rose);color:#fff;border-color:var(--rose)}
+  .slot.inrange{background:var(--rose-light);border-color:var(--rose);color:var(--rose-dark)}
+  .slot:disabled{background:#f6f1f3;color:#c9bcc2;cursor:not-allowed;text-decoration:line-through}
+  .slot .x{display:block;font-size:10px;font-weight:500}
+  .legend{display:flex;gap:16px;font-size:12px;color:var(--muted);margin-top:14px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:14px;height:14px;border-radius:4px;display:inline-block;border:1px solid var(--line)}
+
+  .total-bar{display:flex;justify-content:space-between;align-items:center;margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+  .total-bar .amt{font-size:24px;font-weight:700;color:var(--rose-dark)}
+  .total-bar .amt small{font-size:13px;color:var(--muted);font-weight:500}
+
+  /* ---------- Confirm ---------- */
+  .kv{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .kv:last-child{border-bottom:none}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-weight:600;text-align:right}
+
+  /* ---------- Complete ---------- */
+  .done-card{text-align:center;padding:40px 24px}
+  .done-card .check{width:72px;height:72px;border-radius:50%;background:var(--ok);color:#fff;display:grid;place-items:center;font-size:38px;margin:0 auto 18px}
+  .done-card h2{font-size:22px;margin-bottom:8px}
+  .done-card .code{display:inline-block;background:var(--rose-light);color:var(--rose-dark);font-weight:700;letter-spacing:.08em;padding:8px 18px;border-radius:10px;margin:14px 0;font-size:18px}
+
+  /* ---------- My reservations ---------- */
+  .res-item{display:flex;gap:14px;align-items:center;padding:16px;border:1px solid var(--line);border-radius:12px;margin-bottom:12px;background:#fff}
+  .res-item .ph{width:54px;height:54px;border-radius:10px;display:grid;place-items:center;font-size:26px;color:#fff;flex-shrink:0}
+  .res-item .info{flex:1;min-width:0}
+  .res-item .info h4{font-size:15px}
+  .res-item .info .meta{font-size:13px;color:var(--muted)}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px}
+  .badge.upcoming{background:#e5f3ec;color:var(--ok)}
+  .badge.past{background:#f0ecee;color:var(--muted)}
+  .empty{text-align:center;padding:50px 20px;color:var(--muted)}
+  .empty .ico{font-size:46px;margin-bottom:10px}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:560px){.grid2{grid-template-columns:1fr}.hero{padding:30px 22px}.hero h1{font-size:24px}.step span.txt{display:none}
+    .nav{padding:12px 14px}.logo{font-size:15px}.logo small{font-size:10px}.nav-btn{padding:8px 11px;font-size:13px}.nav-actions{gap:4px}}
+
+  .conn-banner{font-size:12px;text-align:center;padding:6px 14px;font-weight:600}
+  .conn-banner.demo{background:#fef3e6;color:#a8762e}
+  .conn-banner.live{background:#e5f3ec;color:var(--ok)}
+  /* admin login */
+  .login-card{max-width:380px;margin:10px auto;background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px}
+  .login-card h3{font-size:18px;margin-bottom:4px}
+  .login-card p{font-size:13px;color:var(--muted);margin-bottom:18px}
+  .linklike{background:none;color:var(--rose-dark);font-size:13px;text-decoration:underline;padding:10px 4px 0;display:block;margin:0 auto;width:100%}
+  .linklike:hover{color:var(--rose)}
+  .admin-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .admin-bar .who{font-size:13px;color:var(--muted)}
+  .hidden{display:none}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--ink);color:#fff;padding:13px 22px;border-radius:12px;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.2);transition:.3s;z-index:100}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:30px 20px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="nav">
+    <div class="logo" onclick="go('home')">
+      <div class="mark">◇</div>
+      <div>SpaceReserve<small>会議室・スペース予約</small></div>
+    </div>
+    <div class="nav-actions">
+      <button class="nav-btn" onclick="go('admin')">管理</button>
+      <button class="nav-btn" onclick="go('mine')">マイ予約</button>
+      <button class="nav-btn primary" onclick="go('home')">施設を探す</button>
+    </div>
+  </div>
+  <div id="connBanner" class="conn-banner hidden"></div>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ HOME / 施設一覧 ============ -->
+  <section id="view-home">
+    <div class="hero">
+      <div class="deco"></div>
+      <h1>使いたい時間に、ちょうどいい空間を。</h1>
+      <p>会議室・コワーキング・レンタルスペースを、時間単位でかんたん予約。空き状況をその場で確認して、最短3ステップで予約完了します。</p>
+    </div>
+    <div class="section-title">拠点・施設一覧</div>
+    <div class="section-sub">拠点を選んでから、ご利用になる施設をお選びください</div>
+    <div class="store-chips" id="storeChips"></div>
+    <div class="toolbar">
+      <div class="search"><input id="fltQ" placeholder="施設名・設備で検索（例：プロジェクター）" oninput="setFilter('q',this.value)"></div>
+      <select id="fltType" onchange="setFilter('type',this.value)">
+        <option value="all">種別：すべて</option>
+        <option value="会議室">会議室</option>
+        <option value="ワークスペース">ワークスペース</option>
+        <option value="スペース">スペース</option>
+      </select>
+      <select id="fltCap" onchange="setFilter('cap',this.value)">
+        <option value="all">人数：指定なし</option>
+        <option value="1-2">1〜2名</option>
+        <option value="3-6">3〜6名</option>
+        <option value="7-15">7〜15名</option>
+        <option value="16">16名以上</option>
+      </select>
+      <select id="fltSort" onchange="setFilter('sort',this.value)">
+        <option value="recommend">おすすめ順</option>
+        <option value="priceAsc">料金が安い順</option>
+        <option value="priceDesc">料金が高い順</option>
+        <option value="rating">評価が高い順</option>
+        <option value="cap">定員が多い順</option>
+      </select>
+    </div>
+    <div class="result-count" id="resultCount"></div>
+    <div class="grid" id="facilityGrid"></div>
+  </section>
+
+  <!-- ============ BOOKING FLOW ============ -->
+  <section id="view-book" class="hidden">
+    <button class="back" onclick="go('home')">← 施設一覧にもどる</button>
+    <div class="steps" id="stepBar"></div>
+
+    <!-- summary -->
+    <div class="summary" id="bookSummary"></div>
+
+    <!-- step: date & time -->
+    <div id="stepDateTime">
+      <div class="panel">
+        <div class="field">
+          <label>① 日付を選択 <span class="hint">（本日から14日先まで）</span></label>
+          <div class="date-row" id="dateRow"></div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>② 時間を選択 <span class="hint">（開始と終了をタップ／同じ枠で1時間）</span></label>
+          <div class="slots" id="slotGrid"></div>
+          <div class="legend">
+            <span><i style="background:#fff"></i>空き</span>
+            <span><i style="background:var(--rose)"></i>選択中</span>
+            <span><i style="background:var(--rose-light)"></i>選択範囲</span>
+            <span><i style="background:#f6f1f3"></i>予約済み</span>
+          </div>
+        </div>
+        <div class="total-bar">
+          <div><div style="font-size:13px;color:var(--muted)" id="durLabel">時間を選択してください</div>
+          <div class="amt" id="totalAmt">¥0 <small></small></div></div>
+          <button class="btn sm" id="toInfoBtn" disabled onclick="toStep('info')">予約者情報へ →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- step: info -->
+    <div id="stepInfo" class="hidden">
+      <div class="panel">
+        <div class="grid2">
+          <div class="field"><label>お名前 <span class="hint">必須</span></label><input id="fName" placeholder="山田 太郎"></div>
+          <div class="field"><label>会社・団体名</label><input id="fCompany" placeholder="株式会社○○"></div>
+          <div class="field"><label>メールアドレス <span class="hint">必須</span></label><input id="fEmail" type="email" placeholder="example@mail.com"></div>
+          <div class="field"><label>電話番号 <span class="hint">必須</span></label><input id="fPhone" type="tel" placeholder="090-1234-5678"></div>
+          <div class="field"><label>利用人数</label><input id="fPeople" type="number" min="1" placeholder="例）6"></div>
+          <div class="field"><label>利用目的</label>
+            <select id="fPurpose">
+              <option value="">選択してください</option>
+              <option>会議・打合せ</option><option>セミナー・研修</option>
+              <option>面接・採用</option><option>個人作業・勉強</option>
+              <option>イベント・撮影</option><option>その他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0"><label>備考・ご要望</label><textarea id="fNote" rows="3" placeholder="プロジェクター利用希望、レイアウト変更希望 など"></textarea></div>
+        <div class="total-bar">
+          <button class="back" style="margin:0" onclick="toStep('datetime')">← 日時選択へ</button>
+          <button class="btn sm" onclick="toStep('confirm')">確認画面へ →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- step: confirm -->
+    <div id="stepConfirm" class="hidden">
+      <div class="panel">
+        <div class="section-title" style="margin-bottom:16px">予約内容の確認</div>
+        <div id="confirmKV"></div>
+        <div class="total-bar">
+          <button class="back" style="margin:0" onclick="toStep('info')">← 修正する</button>
+          <button class="btn sm" onclick="confirmBooking()">この内容で予約する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- step: complete -->
+    <div id="stepDone" class="hidden">
+      <div class="panel done-card">
+        <div class="check">✓</div>
+        <h2>ご予約が完了しました</h2>
+        <p style="color:var(--muted)">確認メールをお送りしました（デモのため送信はされません）</p>
+        <div class="code" id="doneCode"></div>
+        <div id="doneSummary" style="text-align:left;max-width:420px;margin:0 auto 20px"></div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+          <button class="btn ghost sm" onclick="go('mine')">マイ予約を見る</button>
+          <button class="btn sm" onclick="go('home')">続けて予約する</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MY RESERVATIONS ============ -->
+  <section id="view-mine" class="hidden">
+    <button class="back" onclick="go('home')">← 施設一覧にもどる</button>
+    <div class="section-title">マイ予約</div>
+    <div class="section-sub">この端末から予約した一覧です</div>
+    <div id="resList"></div>
+  </section>
+
+  <!-- ============ ADMIN / 管理画面 ============ -->
+  <section id="view-admin" class="hidden">
+    <div class="admin-bar">
+      <div><div class="section-title">管理画面</div>
+      <div class="section-sub" style="margin:0" id="adminSub">運営者向け：予約・カレンダー・施設の管理</div></div>
+      <div class="who" id="adminWho"></div>
+    </div>
+
+    <!-- ログイン（Supabase接続時のみ表示） -->
+    <div id="adminLogin" class="hidden">
+      <!-- ログインフォーム -->
+      <div class="login-card" id="loginForm">
+        <h3>管理者ログイン</h3>
+        <p>運営者アカウントでログインしてください。</p>
+        <div class="field"><label>メールアドレス</label><input id="loginEmail" type="email" placeholder="admin@example.com"></div>
+        <div class="field"><label>パスワード</label><input id="loginPass" type="password" placeholder="••••••••"></div>
+        <button class="btn" onclick="adminLogin()">ログイン</button>
+        <button class="linklike" onclick="showResetRequest()">パスワードをお忘れですか？</button>
+      </div>
+      <!-- パスワード再設定の申請 -->
+      <div class="login-card hidden" id="resetForm">
+        <h3>パスワード再設定</h3>
+        <p>登録メールアドレス宛に、再設定用リンクをお送りします。</p>
+        <div class="field"><label>メールアドレス</label><input id="resetEmail" type="email" placeholder="admin@example.com"></div>
+        <button class="btn" onclick="sendReset()">再設定リンクを送信</button>
+        <button class="linklike" onclick="showLoginForm()">← ログインに戻る</button>
+      </div>
+    </div>
+
+    <!-- パスワード再設定（メールのリンクから戻ってきた時に表示） -->
+    <div id="recoveryPanel" class="hidden">
+      <div class="login-card">
+        <h3>新しいパスワードの設定</h3>
+        <p>新しいパスワードを入力してください（6文字以上）。</p>
+        <div class="field"><label>新しいパスワード</label><input id="newPass" type="password" placeholder="••••••••"></div>
+        <div class="field"><label>確認のためもう一度</label><input id="newPass2" type="password" placeholder="••••••••"></div>
+        <button class="btn" onclick="setNewPassword()">パスワードを更新</button>
+      </div>
+    </div>
+
+    <!-- 管理本体 -->
+    <div id="adminBody">
+    <div class="admin-tabs">
+      <button data-tab="res" class="active" onclick="adminTab('res')">予約一覧</button>
+      <button data-tab="cal" onclick="adminTab('cal')">カレンダー</button>
+      <button data-tab="fac" onclick="adminTab('fac')">施設管理</button>
+    </div>
+
+    <!-- tab: 予約一覧 -->
+    <div id="adminRes">
+      <div class="stats" id="adminStats"></div>
+      <div class="admin-filters">
+        <select id="admStoreFilter" onchange="onAdmStoreChange()"></select>
+        <select id="admFacFilter" onchange="renderAdminRes()"></select>
+        <input type="date" id="admDateFilter" onchange="renderAdminRes()">
+        <button class="mini-btn" onclick="clearAdmFilters()">フィルタ解除</button>
+      </div>
+      <div class="tbl-wrap" id="admResTable"></div>
+    </div>
+
+    <!-- tab: カレンダー -->
+    <div id="adminCal" class="hidden">
+      <div class="admin-filters">
+        <label style="font-size:13px;font-weight:600">日付</label>
+        <input type="date" id="admCalDate" onchange="renderAdminCal()">
+        <select id="admCalStore" onchange="renderAdminCal()"></select>
+      </div>
+      <div class="cal-legend legend">
+        <span><i style="background:var(--rose)"></i>予約済み</span>
+        <span><i style="background:#fff"></i>空き</span>
+        <span><i style="background:#f3eef0"></i>営業時間外</span>
+      </div>
+      <div class="cal-wrap" id="admCalGrid"></div>
+    </div>
+
+    <!-- tab: 施設管理 -->
+    <div id="adminFac" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div class="section-sub" style="margin:0">登録施設：<b id="facCount">0</b> 件</div>
+        <button class="btn sm" onclick="openFacForm()">＋ 新規施設を追加</button>
+      </div>
+      <div class="fac-list" id="facList"></div>
+
+      <!-- 施設 追加/編集フォーム -->
+      <div class="panel hidden" id="facFormPanel" style="margin-top:18px">
+        <div class="section-title" id="facFormTitle" style="margin-bottom:16px">施設を追加</div>
+        <input type="hidden" id="facId">
+        <div class="grid2">
+          <div class="field"><label>拠点</label><select id="facStore"></select></div>
+          <div class="field"><label>施設名 <span class="hint">必須</span></label><input id="facName" placeholder="例）スカイビュー会議室"></div>
+          <div class="field"><label>種別</label>
+            <select id="facType"><option>会議室</option><option>ワークスペース</option><option>スペース</option></select>
+          </div>
+          <div class="field"><label>定員（名）</label><input id="facCap" type="number" min="1" placeholder="12"></div>
+          <div class="field"><label>面積・区分</label><input id="facArea" placeholder="32㎡ / 個席 など"></div>
+          <div class="field"><label>フロア</label><input id="facLoc" placeholder="12F"></div>
+          <div class="field"><label>料金（円/時間）</label><input id="facPrice" type="number" min="0" placeholder="3000"></div>
+          <div class="field"><label>開始時刻（時）</label><input id="facOpen" type="number" min="0" max="23" placeholder="8"></div>
+          <div class="field"><label>終了時刻（時）</label><input id="facClose" type="number" min="1" max="24" placeholder="21"></div>
+          <div class="field"><label>アイコン（絵文字）</label><input id="facIcon" maxlength="2" placeholder="🏙️"></div>
+          <div class="field"><label>設備（カンマ区切り）</label><input id="facEquip" placeholder="プロジェクター, Wi-Fi"></div>
+        </div>
+        <div class="field"><label>説明</label><input id="facDesc" placeholder="最上階・眺望良好。役員会議やセミナーに。"></div>
+        <div class="field"><label>カラー</label><div class="swatches" id="facSwatches"></div></div>
+        <div class="total-bar">
+          <button class="back" style="margin:0" onclick="closeFacForm()">キャンセル</button>
+          <button class="btn sm" onclick="saveFac()">保存する</button>
+        </div>
+      </div>
+    </div>
+    </div><!-- /adminBody -->
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<footer id="appFooter">© SpaceReserve</footer>
+
+<script>
+/* ============ DATA ============ */
+// 拠点（店舗）。チェーン展開を想定し、各施設はいずれかの拠点に属する
+const STORES = [
+  {id:'S1', name:'丸の内ステーションオフィス', area:'東京', access:'JR東京駅 徒歩3分',       icon:'🗼'},
+  {id:'S2', name:'みなとみらいベイサイド',     area:'横浜', access:'みなとみらい線 徒歩5分', icon:'⚓'},
+  {id:'S3', name:'梅田スカイラウンジ',         area:'大阪', access:'JR大阪駅 徒歩4分',       icon:'🌆'}
+];
+const storeById=(id)=>STORES.find(s=>s.id===id)||{id:'',name:'未設定',area:'',access:'',icon:'🏢'};
+
+const FACILITY_SEED = [
+  {id:'A', storeId:'S1', name:'スカイビュー会議室', type:'会議室', cap:12, area:'32㎡', price:3000, loc:'12F', rating:4.8, reviews:126,
+   color:'linear-gradient(135deg,#b5687f,#d99fb0)', icon:'🏙️',
+   equip:['プロジェクター','ホワイトボード','Wi-Fi','大型モニター'],
+   desc:'最上階・眺望良好。役員会議やセミナーに。', open:8, close:21},
+  {id:'B', storeId:'S1', name:'コンパクトミーティングルーム', type:'会議室', cap:4, area:'12㎡', price:1200, loc:'5F', rating:4.5, reviews:89,
+   color:'linear-gradient(135deg,#6a8caf,#a9c3dd)', icon:'💬',
+   equip:['モニター','Wi-Fi','ホワイトボード'],
+   desc:'少人数の打合せ・1on1・オンライン会議に最適。', open:9, close:20},
+  {id:'E', storeId:'S1', name:'防音セミナールーム', type:'会議室', cap:20, area:'45㎡', price:3800, loc:'6F', rating:4.4, reviews:53,
+   color:'linear-gradient(135deg,#8a6aaf,#bda9dd)', icon:'🎤',
+   equip:['マイク・音響','プロジェクター','録画設備','Wi-Fi'],
+   desc:'防音仕様。研修・配信・収録に対応。', open:8, close:21},
+  {id:'C', storeId:'S2', name:'コワーキングデスク', type:'ワークスペース', cap:1, area:'個席', price:600, loc:'3F', rating:4.6, reviews:204,
+   color:'linear-gradient(135deg,#5e9e84,#9bc9b4)', icon:'💻',
+   equip:['電源','Wi-Fi','フリードリンク'],
+   desc:'集中作業・リモートワークに。1席単位で予約。', open:8, close:22},
+  {id:'D', storeId:'S2', name:'多目的レンタルスペース', type:'スペース', cap:30, area:'68㎡', price:5000, loc:'2F', rating:4.7, reviews:67,
+   color:'linear-gradient(135deg,#c08a4a,#e0bd8c)', icon:'🎪',
+   equip:['音響設備','プロジェクター','可動式テーブル','Wi-Fi'],
+   desc:'イベント・ワークショップ・撮影に。レイアウト自由。', open:9, close:22},
+  {id:'H', storeId:'S2', name:'防音ワークブース', type:'ワークスペース', cap:1, area:'個室', price:800, loc:'3F', rating:4.7, reviews:175,
+   color:'linear-gradient(135deg,#7b6aaf,#b4a6dd)', icon:'🎧',
+   equip:['電源','Wi-Fi','防音','モニター'],
+   desc:'完全個室の防音ブース。Web会議・集中作業に。', open:7, close:23},
+  {id:'F', storeId:'S3', name:'カフェラウンジ席', type:'ワークスペース', cap:6, area:'20㎡', price:900, loc:'1F', rating:4.3, reviews:142,
+   color:'linear-gradient(135deg,#b07d6a,#ddb6a3)', icon:'☕',
+   equip:['電源','Wi-Fi','カフェ併設'],
+   desc:'リラックスした打合せ・商談に。ドリンク注文可。', open:8, close:22},
+  {id:'G', storeId:'S3', name:'ガラス張り役員ルーム', type:'会議室', cap:8, area:'26㎡', price:2600, loc:'10F', rating:4.9, reviews:38,
+   color:'linear-gradient(135deg,#4f8a8b,#9ecfcf)', icon:'🪟',
+   equip:['大型モニター','Web会議カメラ','ホワイトボード','Wi-Fi'],
+   desc:'採光良好な個室。商談・取締役会・オンライン会議に。', open:8, close:21}
+];
+
+/* ============ BACKEND（LocalStorage ↔ Supabase 両対応）============ */
+// ▼ Supabaseに接続する場合は下の2つを設定（anon keyはRLSで保護される公開鍵なので埋め込みOK）
+const SUPABASE_URL = 'https://ghuoehblmoizcpnydavw.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Mcu9bdALsckDzWq2CfG7Cg_1h4h28UZ'; // publishable(公開)キー
+const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
+let sb = null;
+
+const STORE_KEY='spacereserve_reservations_v1';
+const FAC_KEY='spacereserve_facilities_v1';
+const MYIDS_KEY='spacereserve_my_res_ids_v1';
+
+// 画面描画はこのキャッシュを同期的に参照する
+let FACILITIES = [];
+let RES_CACHE = [];
+const loadRes = () => RES_CACHE;
+
+// この端末で作成した予約ID（マイ予約の絞り込み用。バックエンド共有時も端末ごとに表示）
+const myResIds   = () => { try{ return JSON.parse(localStorage.getItem(MYIDS_KEY)||'[]'); }catch(e){ return []; } };
+const addMyResId = (id)=>{ const a=myResIds(); a.push(id); localStorage.setItem(MYIDS_KEY, JSON.stringify(a)); };
+const rmMyResId  = (id)=>{ localStorage.setItem(MYIDS_KEY, JSON.stringify(myResIds().filter(x=>x!==id))); };
+
+// ローカル施設（初回シード＋旧データ移行）
+function loadFacilitiesLocal(){
+  const s=localStorage.getItem(FAC_KEY);
+  if(s){ try{ const a=JSON.parse(s); if(Array.isArray(a)&&a.length && a.every(f=>f.storeId)) return a; }catch(e){} }
+  localStorage.setItem(FAC_KEY, JSON.stringify(FACILITY_SEED));
+  return FACILITY_SEED.slice();
+}
+const saveFacilitiesLocal=(list)=>localStorage.setItem(FAC_KEY, JSON.stringify(list));
+
+// JSオブジェクト ↔ DB行 のマッピング（open/end/desc等の予約語を回避）
+const facToRow=(f)=>({id:f.id,store_id:f.storeId,name:f.name,type:f.type,cap:f.cap,area:f.area,loc:f.loc,price:f.price,open_h:f.open,close_h:f.close,icon:f.icon,equip:f.equip,color:f.color,rating:f.rating,reviews:f.reviews,description:f.desc});
+const rowToFac=(r)=>({id:r.id,storeId:r.store_id,name:r.name,type:r.type,cap:r.cap,area:r.area,loc:r.loc,price:r.price,open:r.open_h,close:r.close_h,icon:r.icon,equip:r.equip||[],color:r.color,rating:r.rating,reviews:r.reviews,desc:r.description});
+const resToRow=(r)=>({id:r.id,facility_id:r.facilityId,facility_name:r.facilityName,icon:r.icon,color:r.color,store_id:r.storeId,store_name:r.storeName,store_area:r.storeArea,date:r.date,start_h:r.start,end_h:r.end,hours:r.hours,total:r.total,name:r.name,company:r.company,email:r.email,phone:r.phone,people:r.people,purpose:r.purpose,note:r.note,created_at:r.createdAt});
+const rowToRes=(r)=>({id:r.id,facilityId:r.facility_id,facilityName:r.facility_name,icon:r.icon,color:r.color,storeId:r.store_id,storeName:r.store_name,storeArea:r.store_area,date:r.date,start:r.start_h,end:r.end_h,hours:r.hours,total:r.total,name:r.name,company:r.company,email:r.email,phone:r.phone,people:r.people,purpose:r.purpose,note:r.note,createdAt:r.created_at});
+
+const DB = {
+  init(){ if(USE_SUPABASE){ sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } },
+  async fetchFacilities(){
+    if(USE_SUPABASE){
+      const {data,error}=await sb.from('facilities').select('*').order('store_id');
+      if(error){ console.warn('facilities:',error.message); return []; }
+      return data.map(rowToFac);
+    }
+    return loadFacilitiesLocal();
+  },
+  async fetchReservations(){
+    if(USE_SUPABASE){
+      const {data,error}=await sb.from('reservations').select('*');
+      if(error){ console.warn('reservations:',error.message); return []; }
+      return data.map(rowToRes);
+    }
+    try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'[]'); }catch(e){ return []; }
+  },
+  async addReservation(rec){
+    if(USE_SUPABASE){ const {error}=await sb.from('reservations').insert(resToRow(rec)); if(error) throw error; }
+    else { const a=await this.fetchReservations(); a.push(rec); localStorage.setItem(STORE_KEY, JSON.stringify(a)); }
+  },
+  async deleteReservation(id){
+    if(USE_SUPABASE){
+      const {data,error}=await sb.from('reservations').delete().eq('id',id).select();
+      if(error) throw error;
+      if(!data || data.length===0){ const e=new Error('PERM'); e.code='PERM'; throw e; } // RLSで削除不可（未ログイン）
+    }
+    else { const a=await this.fetchReservations(); localStorage.setItem(STORE_KEY, JSON.stringify(a.filter(r=>r.id!==id))); }
+  },
+  async upsertFacility(f){
+    if(USE_SUPABASE){ const {error}=await sb.from('facilities').upsert(facToRow(f)); if(error) throw error; }
+    else { const a=loadFacilitiesLocal(); const i=a.findIndex(x=>x.id===f.id); if(i>=0) a[i]=f; else a.push(f); saveFacilitiesLocal(a); }
+  },
+  async deleteFacilityById(id){
+    if(USE_SUPABASE){ const {error}=await sb.from('facilities').delete().eq('id',id); if(error) throw error; }
+    else { saveFacilitiesLocal(loadFacilitiesLocal().filter(x=>x.id!==id)); }
+  }
+};
+
+async function refreshFacilities(){ FACILITIES = await DB.fetchFacilities(); }
+async function refreshReservations(){ RES_CACHE = await DB.fetchReservations(); }
+
+// 管理者認証（Supabase接続時のみ）
+let currentUser = null;
+async function refreshAuth(){ if(!USE_SUPABASE) return; try{ const {data}=await sb.auth.getUser(); currentUser=data?data.user:null; }catch(e){ currentUser=null; } }
+async function adminLogin(){
+  const email=$('loginEmail').value.trim(), pass=$('loginPass').value;
+  if(!email||!pass){ toast('メールとパスワードを入力してください'); return; }
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){ toast('ログインに失敗しました'); return; }
+  await refreshAuth(); renderAdmin(); toast('ログインしました');
+}
+async function adminLogout(){ await sb.auth.signOut(); currentUser=null; renderAdmin(); toast('ログアウトしました'); }
+
+// パスワード再設定
+let recoveryMode=false;
+function showLoginForm(){ $('loginForm').classList.remove('hidden'); $('resetForm').classList.add('hidden'); }
+function showResetRequest(){
+  $('resetForm').classList.remove('hidden'); $('loginForm').classList.add('hidden');
+  const e=$('loginEmail').value.trim(); if(e) $('resetEmail').value=e;
+}
+async function sendReset(){
+  const email=$('resetEmail').value.trim();
+  if(!email){ toast('メールアドレスを入力してください'); return; }
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('メールアドレスの形式が正しくありません'); return; }
+  const redirectTo=location.origin+location.pathname;
+  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo});
+  if(error){ toast('送信に失敗しました：'+error.message); return; }
+  toast('再設定リンクを送信しました。メールをご確認ください');
+  showLoginForm();
+}
+async function setNewPassword(){
+  const p1=$('newPass').value, p2=$('newPass2').value;
+  if(p1.length<6){ toast('パスワードは6文字以上にしてください'); return; }
+  if(p1!==p2){ toast('パスワードが一致しません'); return; }
+  const {error}=await sb.auth.updateUser({password:p1});
+  if(error){ toast('更新に失敗しました：'+error.message); return; }
+  recoveryMode=false;
+  // URLのリカバリ用ハッシュを除去
+  if(location.hash) history.replaceState(null,'',location.pathname+location.search);
+  await refreshAuth(); toast('パスワードを更新しました'); go('admin');
+}
+
+function renderConnBanner(){
+  const b=$('connBanner');
+  const ft=$('appFooter');
+  if(USE_SUPABASE){
+    b.className='conn-banner live'; b.textContent='● Supabaseに接続中（複数端末で予約を共有）';
+    if(ft) ft.textContent='© SpaceReserve — Supabase接続（予約データはクラウドに保存・複数端末で共有）';
+  }
+  else {
+    b.className='conn-banner demo'; b.textContent='● デモモード：データはこの端末内に保存されます（Supabase接続で複数端末共有・管理ログインが有効になります）';
+    if(ft) ft.textContent='© SpaceReserve — デモアプリ（予約データはこの端末内に保存されます）';
+  }
+  b.classList.remove('hidden');
+}
+
+// 施設フォームで選べるグラデーション配色
+const GRADIENTS = [
+  'linear-gradient(135deg,#b5687f,#d99fb0)','linear-gradient(135deg,#6a8caf,#a9c3dd)',
+  'linear-gradient(135deg,#5e9e84,#9bc9b4)','linear-gradient(135deg,#c08a4a,#e0bd8c)',
+  'linear-gradient(135deg,#8a6aaf,#bda9dd)','linear-gradient(135deg,#b07d6a,#ddb6a3)',
+  'linear-gradient(135deg,#4f8a8b,#9ecfcf)','linear-gradient(135deg,#7b6aaf,#b4a6dd)'
+];
+
+/* ============ STATE ============ */
+let state = { facility:null, date:null, start:null, end:null };
+
+/* ============ HELPERS ============ */
+const $ = (id) => document.getElementById(id);
+const yen = (n) => '¥' + n.toLocaleString();
+const pad = (n) => String(n).padStart(2,'0');
+const DOW = ['日','月','火','水','木','金','土'];
+function dateKey(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function fmtDate(key){ const [y,m,d]=key.split('-'); const dt=new Date(y,m-1,d); return `${m}月${d}日(${DOW[dt.getDay()]})`; }
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+// 予約レコードから拠点ラベルを得る（旧データは施設マスタから補完）
+function resStoreLabel(r){
+  if(r.storeArea && r.storeName) return `${r.storeArea}・${r.storeName}`;
+  const f=FACILITIES.find(x=>x.id===r.facilityId);
+  if(f){ const st=storeById(f.storeId); return st.id?`${st.area}・${st.name}`:''; }
+  return '';
+}
+
+/* ============ NAVIGATION ============ */
+function go(view){
+  ['home','book','mine','admin'].forEach(v=>$('view-'+v).classList.toggle('hidden', v!==view));
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(view==='mine') renderMine();
+  if(view==='home') renderFacilities();
+  if(view==='admin') renderAdmin();
+}
+
+/* ============ FACILITY LIST / 検索・絞り込み・並び替え ============ */
+let filters = { store:'all', q:'', type:'all', cap:'all', sort:'recommend' };
+function setFilter(key,val){ filters[key]=val; renderFacilities(); }
+function setStore(id){ filters.store=id; renderFacilities(); }
+
+function applyFilters(list){
+  let r = list.slice();
+  if(filters.store!=='all') r=r.filter(f=>f.storeId===filters.store);
+  if(filters.q.trim()){
+    const q=filters.q.trim().toLowerCase();
+    r=r.filter(f=>(f.name+f.desc+f.type+f.equip.join('')).toLowerCase().includes(q));
+  }
+  if(filters.type!=='all') r=r.filter(f=>f.type===filters.type);
+  if(filters.cap!=='all') r=r.filter(f=>{
+    if(filters.cap==='1-2')  return f.cap<=2;
+    if(filters.cap==='3-6')  return f.cap>=3 && f.cap<=6;
+    if(filters.cap==='7-15') return f.cap>=7 && f.cap<=15;
+    if(filters.cap==='16')   return f.cap>=16;
+    return true;
+  });
+  if(filters.sort==='priceAsc')  r.sort((a,b)=>a.price-b.price);
+  if(filters.sort==='priceDesc') r.sort((a,b)=>b.price-a.price);
+  if(filters.sort==='rating')    r.sort((a,b)=>b.rating-a.rating);
+  if(filters.sort==='cap')       r.sort((a,b)=>b.cap-a.cap);
+  return r;
+}
+
+// 本日の空き枠数（過去時間・予約済みを除く）
+function freeSlotsToday(f){
+  const now=new Date(); const todayKey=dateKey(now);
+  const booked=new Set();
+  loadRes().filter(r=>r.facilityId===f.id && r.date===todayKey)
+    .forEach(r=>{ for(let h=r.start;h<r.end;h++) booked.add(h); });
+  let free=0;
+  for(let h=f.open;h<f.close;h++){ if(!booked.has(h) && h>now.getHours()) free++; }
+  return free;
+}
+
+function renderStoreChips(){
+  const chip=(id,icon,title,sub,active)=>`
+    <button class="store-chip ${active?'active':''}" onclick="setStore('${id}')">
+      <span class="ico">${icon}</span>
+      <span class="txt"><b>${title}</b><small>${sub}</small></span>
+    </button>`;
+  const total=FACILITIES.length;
+  let html=chip('all','🏢','すべての拠点',`全${total}施設`, filters.store==='all');
+  html+=STORES.map(s=>{
+    const n=FACILITIES.filter(f=>f.storeId===s.id).length;
+    return chip(s.id, s.icon, `${s.area}・${s.name.replace(/（.*）/,'')}`, `${n}施設 / ${s.access}`, filters.store===s.id);
+  }).join('');
+  $('storeChips').innerHTML=html;
+}
+
+function renderFacilities(){
+  renderStoreChips();
+  const list = applyFilters(FACILITIES);
+  const scope = filters.store==='all' ? '全拠点' : `${storeById(filters.store).area}・${storeById(filters.store).name}`;
+  $('resultCount').innerHTML = `${scope}：<b>${list.length}</b> 件の施設`;
+  if(list.length===0){
+    $('facilityGrid').innerHTML=`<div class="empty" style="grid-column:1/-1"><div class="ico">🔍</div>条件に合う施設が見つかりませんでした<br><button class="btn ghost sm" style="margin-top:14px" onclick="resetFilters()">条件をリセット</button></div>`;
+    return;
+  }
+  $('facilityGrid').innerHTML = list.map(f=>{
+    const free=freeSlotsToday(f);
+    const avail = free>0 ? `<span class="avail ok">本日 空き${free}枠</span>` : `<span class="avail full">本日 満室</span>`;
+    const ratingHtml = (f.reviews>0)
+      ? `★ ${Number(f.rating).toFixed(1)} <span class="rev">(${f.reviews}件)</span>`
+      : `<span class="rev" style="color:var(--rose-dark);font-weight:700">NEW</span>`;
+    const st=storeById(f.storeId);
+    return `
+    <div class="card">
+      <div class="photo" style="background:${f.color}">${f.icon}<span class="floor">${f.loc}</span></div>
+      <div class="body">
+        <div class="store-badge">${st.icon} ${st.area}・${st.name}</div>
+        <div class="tags"><span class="tag">${f.type}</span><span class="tag">定員${f.cap}名</span><span class="tag">${f.area}</span></div>
+        <h3>${f.name}</h3>
+        <div class="rating">${ratingHtml} ${avail}</div>
+        <div class="meta">${f.desc}</div>
+        <div class="tags">${f.equip.map(e=>`<span class="tag" style="background:#f0ecee;color:var(--muted)">${e}</span>`).join('')}</div>
+        <div class="price">${yen(f.price)}<small> / 時間</small></div>
+        <button class="btn" onclick="startBooking('${f.id}')">空き状況を見る・予約</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function resetFilters(){
+  filters={ store:'all', q:'', type:'all', cap:'all', sort:'recommend' };
+  $('fltQ').value=''; $('fltType').value='all'; $('fltCap').value='all'; $('fltSort').value='recommend';
+  renderFacilities();
+}
+
+/* ============ BOOKING ============ */
+function startBooking(fid){
+  state = { facility: FACILITIES.find(f=>f.id===fid), date:null, start:null, end:null };
+  go('book');
+  toStep('datetime');
+  renderSummary();
+  renderDates();
+  renderSlots();
+  updateTotal();
+}
+
+const STEPS=[['datetime','日時選択'],['info','予約者情報'],['confirm','確認'],['done','完了']];
+let curStep='datetime';
+function renderStepBar(){
+  const idx = STEPS.findIndex(s=>s[0]===curStep);
+  $('stepBar').innerHTML = STEPS.map((s,i)=>`
+    <div class="step ${i===idx?'active':''} ${i<idx?'done':''}">
+      <span class="n">${i<idx?'✓':i+1}</span><span class="txt">${s[1]}</span>
+    </div>`).join('');
+}
+function toStep(step){
+  // validation
+  if(step==='info' && (state.start===null||state.end===null)){ toast('時間を選択してください'); return; }
+  if(step==='confirm'){
+    const name=$('fName').value.trim(), email=$('fEmail').value.trim(), phone=$('fPhone').value.trim();
+    if(!name||!email||!phone){ toast('必須項目（お名前・メール・電話）を入力してください'); return; }
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('メールアドレスの形式が正しくありません'); return; }
+    renderConfirm();
+  }
+  curStep=step;
+  $('stepDateTime').classList.toggle('hidden', step!=='datetime');
+  $('stepInfo').classList.toggle('hidden', step!=='info');
+  $('stepConfirm').classList.toggle('hidden', step!=='confirm');
+  $('stepDone').classList.toggle('hidden', step!=='done');
+  $('bookSummary').classList.toggle('hidden', step==='done');
+  renderStepBar();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderSummary(){
+  const f=state.facility; const st=storeById(f.storeId);
+  $('bookSummary').innerHTML=`
+    <div class="ph" style="background:${f.color}">${f.icon}</div>
+    <div><div class="store-badge" style="margin-bottom:4px">${st.icon} ${st.area}・${st.name}</div><h3>${f.name}</h3>
+    <div class="meta">${f.type}・定員${f.cap}名・${f.area} ／ ${yen(f.price)}/時間（${f.open}:00〜${f.close}:00）</div></div>`;
+}
+
+function renderDates(){
+  const row=$('dateRow'); row.innerHTML='';
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(let i=0;i<14;i++){
+    const d=new Date(today); d.setDate(today.getDate()+i);
+    const key=dateKey(d); const dow=d.getDay();
+    const cls = dow===0?'sun':dow===6?'sat':'';
+    const el=document.createElement('button');
+    el.className='date-chip '+cls+(state.date===key?' active':'');
+    el.innerHTML=`<span class="dow">${i===0?'今日':DOW[dow]}</span><span class="d">${d.getDate()}</span><span class="m">${d.getMonth()+1}月</span>`;
+    el.onclick=()=>{ state.date=key; state.start=null; state.end=null; renderDates(); renderSlots(); updateTotal(); };
+    row.appendChild(el);
+  }
+}
+
+function bookedHours(){
+  if(!state.date) return new Set();
+  const set=new Set();
+  loadRes().filter(r=>r.facilityId===state.facility.id && r.date===state.date)
+    .forEach(r=>{ for(let h=r.start;h<r.end;h++) set.add(h); });
+  return set;
+}
+
+function renderSlots(){
+  const f=state.facility, grid=$('slotGrid');
+  if(!state.date){ grid.innerHTML='<div style="color:var(--muted);font-size:14px;grid-column:1/-1">まず日付を選んでください</div>'; return; }
+  const booked=bookedHours();
+  const now=new Date(); const todayKey=dateKey(new Date(now.getFullYear(),now.getMonth(),now.getDate()));
+  grid.innerHTML='';
+  for(let h=f.open; h<f.close; h++){
+    const isBooked = booked.has(h);
+    const isPast = state.date===todayKey && h<=now.getHours();
+    const disabled = isBooked||isPast;
+    let cls='slot';
+    if(state.start!==null && state.end!==null && h>=state.start && h<state.end) cls+=' inrange';
+    if(h===state.start) cls+=' sel';
+    const el=document.createElement('button');
+    el.className=cls; el.disabled=disabled;
+    el.innerHTML=`${pad(h)}:00${disabled?'<span class="x">'+(isBooked?'予約済':'受付終了')+'</span>':''}`;
+    el.onclick=()=>pickSlot(h);
+    grid.appendChild(el);
+  }
+}
+
+function pickSlot(h){
+  // 1タップ目で開始（1時間）、2タップ目以降で範囲を延長／縮小する
+  const booked=bookedHours();
+  const rangeFree=(a,b)=>{ for(let x=a;x<b;x++){ if(booked.has(x)) return false; } return true; };
+
+  if(state.start===null){
+    state.start=h; state.end=h+1;                       // 初回：単発1時間
+  } else if(h===state.start && state.end===state.start+1){
+    state.start=null; state.end=null;                   // 同じ単発枠を再タップ→解除
+  } else if(h < state.start){
+    if(rangeFree(h,state.end)){ state.start=h; }         // 開始を前方向に延長
+    else { state.start=h; state.end=h+1; }               // 間に予約済み→単発に
+  } else if(h >= state.end){
+    if(rangeFree(state.start,h+1)){ state.end=h+1; }     // 終了を後方向に延長
+    else { toast('予約済みの時間をまたいでいます'); }
+  } else {
+    state.end=h+1;                                       // 範囲内を再タップ→終了を縮小
+  }
+  renderSlots(); updateTotal();
+}
+
+function updateTotal(){
+  const btn=$('toInfoBtn');
+  if(state.start===null||state.end===null){
+    $('durLabel').textContent='時間を選択してください';
+    $('totalAmt').innerHTML='¥0 <small></small>';
+    btn.disabled=true; return;
+  }
+  const hours=state.end-state.start;
+  const total=hours*state.facility.price;
+  $('durLabel').textContent=`${pad(state.start)}:00 〜 ${pad(state.end)}:00（${hours}時間）`;
+  $('totalAmt').innerHTML=`${yen(total)} <small>/ ${hours}時間</small>`;
+  btn.disabled=false;
+}
+
+function renderConfirm(){
+  const f=state.facility, hours=state.end-state.start; const st=storeById(f.storeId);
+  const rows=[
+    ['拠点', `${st.icon} ${st.area}・${st.name}`],
+    ['施設', f.name],
+    ['日付', fmtDate(state.date)],
+    ['時間', `${pad(state.start)}:00 〜 ${pad(state.end)}:00（${hours}時間）`],
+    ['お名前', $('fName').value.trim()],
+    ['会社・団体', $('fCompany').value.trim()||'—'],
+    ['メール', $('fEmail').value.trim()],
+    ['電話', $('fPhone').value.trim()],
+    ['利用人数', $('fPeople').value?($('fPeople').value+'名'):'—'],
+    ['利用目的', $('fPurpose').value||'—'],
+    ['備考', $('fNote').value.trim()||'—'],
+    ['料金', `<span style="color:var(--rose-dark);font-size:17px">${yen(hours*f.price)}</span>`]
+  ];
+  $('confirmKV').innerHTML=rows.map(([k,v])=>`<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`).join('');
+}
+
+async function confirmBooking(){
+  const f=state.facility, hours=state.end-state.start; const st=storeById(f.storeId);
+  const code='SR-'+Date.now().toString().slice(-6);
+  const rec={
+    id:code, facilityId:f.id, facilityName:f.name, icon:f.icon, color:f.color,
+    storeId:f.storeId, storeName:st.name, storeArea:st.area,
+    date:state.date, start:state.start, end:state.end, hours, total:hours*f.price,
+    name:$('fName').value.trim(), company:$('fCompany').value.trim(),
+    email:$('fEmail').value.trim(), phone:$('fPhone').value.trim(),
+    people:$('fPeople').value, purpose:$('fPurpose').value, note:$('fNote').value.trim(),
+    createdAt:new Date().toISOString()
+  };
+  // 念のため確定直前にも空き状況を再取得して二重予約を防ぐ
+  await refreshReservations();
+  const taken=RES_CACHE.some(r=>r.facilityId===f.id && r.date===state.date && !(state.end<=r.start || state.start>=r.end));
+  if(taken){ toast('申し訳ありません。その時間は直前に予約されました'); renderSlots(); updateTotal(); toStep('datetime'); return; }
+  try{ await DB.addReservation(rec); }catch(e){ toast('予約の保存に失敗しました'); return; }
+  addMyResId(code);
+  await refreshReservations();
+  $('doneCode').textContent='予約番号：'+code;
+  $('doneSummary').innerHTML=`
+    <div class="kv"><span class="k">拠点</span><span class="v">${st.area}・${st.name}</span></div>
+    <div class="kv"><span class="k">施設</span><span class="v">${f.name}</span></div>
+    <div class="kv"><span class="k">日時</span><span class="v">${fmtDate(state.date)} ${pad(state.start)}:00〜${pad(state.end)}:00</span></div>
+    <div class="kv"><span class="k">料金</span><span class="v">${yen(rec.total)}</span></div>`;
+  // reset form
+  ['fName','fCompany','fEmail','fPhone','fPeople','fNote'].forEach(id=>$(id).value='');
+  $('fPurpose').value='';
+  toStep('done');
+}
+
+/* ============ MY RESERVATIONS ============ */
+function renderMine(){
+  const ids=myResIds();
+  const all=loadRes().filter(r=>ids.includes(r.id)).sort((a,b)=> (a.date+a.start) < (b.date+b.start) ? 1 : -1);
+  if(all.length===0){
+    $('resList').innerHTML=`<div class="empty"><div class="ico">🗓️</div>まだ予約はありません<br><button class="btn ghost sm" style="margin-top:14px" onclick="go('home')">施設を探す</button></div>`;
+    return;
+  }
+  const now=new Date();
+  $('resList').innerHTML=all.map(r=>{
+    const [y,m,d]=r.date.split('-');
+    const end=new Date(y,m-1,d,r.end);
+    const past = end < now;
+    const storeLabel = resStoreLabel(r);
+    return `<div class="res-item">
+      <div class="ph" style="background:${r.color}">${r.icon}</div>
+      <div class="info">
+        <h4>${r.facilityName} <span class="badge ${past?'past':'upcoming'}">${past?'利用済':'予約中'}</span></h4>
+        ${storeLabel?`<div class="meta" style="color:var(--rose-dark);font-weight:600">📍 ${storeLabel}</div>`:''}
+        <div class="meta">${fmtDate(r.date)} ${pad(r.start)}:00〜${pad(r.end)}:00（${r.hours}h）／ ${yen(r.total)}</div>
+        <div class="meta">予約番号：${r.id}　${r.name}様</div>
+      </div>
+      ${past?'':`<button class="btn ghost sm" onclick="cancelRes('${r.id}')">キャンセル</button>`}
+    </div>`;
+  }).join('');
+}
+
+async function cancelRes(id){
+  if(!confirm('この予約をキャンセルしますか？')) return;
+  try{ await DB.deleteReservation(id); }
+  catch(e){ toast(e.code==='PERM' ? 'オンライン取消は運営者のみ可能です。お手数ですが施設へご連絡ください' : 'キャンセルに失敗しました'); return; }
+  rmMyResId(id);
+  await refreshReservations(); renderMine(); toast('予約をキャンセルしました');
+}
+
+/* ============ ADMIN / 管理画面 ============ */
+let admTab='res';
+let facSwatch=GRADIENTS[0];
+const facById=(id)=>FACILITIES.find(f=>f.id===id);
+
+// 予約レコードの拠点ID（旧データは施設マスタから補完）
+function resStoreId(r){
+  if(r.storeId) return r.storeId;
+  const f=FACILITIES.find(x=>x.id===r.facilityId);
+  return f?f.storeId:'';
+}
+
+function populateStoreSelects(){
+  const opts=`<option value="all">拠点：すべて</option>`+STORES.map(s=>`<option value="${s.id}">${s.area}・${s.name}</option>`).join('');
+  ['admStoreFilter','admCalStore'].forEach(id=>{ const el=$(id); if(el){ const cur=el.value||'all'; el.innerHTML=opts; el.value=STORES.some(s=>s.id===cur)||cur==='all'?cur:'all'; } });
+}
+
+function populateFacFilter(){
+  const sel=$('admFacFilter'); if(!sel) return;
+  const store=$('admStoreFilter')?$('admStoreFilter').value:'all';
+  const cur=sel.value||'all';
+  const facs=FACILITIES.filter(f=>store==='all'||f.storeId===store);
+  sel.innerHTML=`<option value="all">施設：すべて</option>`+facs.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
+  sel.value=facs.some(f=>f.id===cur)?cur:'all';
+}
+
+function onAdmStoreChange(){ populateFacFilter(); renderAdminRes(); }
+
+function renderAdmin(){
+  // メールのリンクから戻ってきた直後はパスワード再設定パネルを最優先で表示
+  if(recoveryMode){
+    $('adminLogin').classList.add('hidden');
+    $('adminBody').classList.add('hidden');
+    $('recoveryPanel').classList.remove('hidden');
+    return;
+  }
+  $('recoveryPanel').classList.add('hidden');
+  const needLogin = USE_SUPABASE && !currentUser;
+  $('adminLogin').classList.toggle('hidden', !needLogin);
+  $('adminBody').classList.toggle('hidden', needLogin);
+  $('adminWho').innerHTML = (USE_SUPABASE && currentUser)
+    ? `${currentUser.email} <button class="mini-btn" style="margin-left:8px" onclick="adminLogout()">ログアウト</button>` : '';
+  $('adminSub').textContent = USE_SUPABASE
+    ? '運営者向け：予約・カレンダー・施設の管理'
+    : '運営者向け：予約・カレンダー・施設の管理（デモモード：認証なし）';
+  if(needLogin) return;
+  populateStoreSelects(); populateFacFilter(); adminTab(admTab);
+}
+
+function adminTab(tab){
+  admTab=tab;
+  document.querySelectorAll('.admin-tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  $('adminRes').classList.toggle('hidden', tab!=='res');
+  $('adminCal').classList.toggle('hidden', tab!=='cal');
+  $('adminFac').classList.toggle('hidden', tab!=='fac');
+  if(tab==='res') renderAdminRes();
+  if(tab==='cal') renderAdminCal();
+  if(tab==='fac') renderFacAdmin();
+}
+
+function renderAdminRes(){
+  const all=loadRes();
+  const now=new Date(), todayKey=dateKey(now);
+  const upcoming=all.filter(r=>{const[y,m,d]=r.date.split('-');return new Date(y,m-1,d,r.end)>=now;});
+  const revenue=all.reduce((s,r)=>s+(r.total||0),0);
+  $('adminStats').innerHTML=[
+    ['総予約数', all.length+'件'],
+    ['本日の予約', all.filter(r=>r.date===todayKey).length+'件'],
+    ['今後の予約', upcoming.length+'件'],
+    ['売上合計', yen(revenue)]
+  ].map(([l,n])=>`<div class="stat"><div class="label">${l}</div><div class="num">${n}</div></div>`).join('');
+
+  const fStore=$('admStoreFilter').value, fFac=$('admFacFilter').value, fDate=$('admDateFilter').value;
+  let rows=all.filter(r=>(fStore==='all'||resStoreId(r)===fStore)&&(fFac==='all'||r.facilityId===fFac)&&(!fDate||r.date===fDate));
+  rows.sort((a,b)=>((a.date+pad(a.start))<(b.date+pad(b.start)))?1:-1);
+  if(rows.length===0){
+    $('admResTable').innerHTML=`<div class="empty"><div class="ico">🗒️</div>該当する予約はありません</div>`;
+    return;
+  }
+  $('admResTable').innerHTML=`<table class="tbl"><thead><tr>
+    <th>予約番号</th><th>拠点</th><th>施設</th><th>日付</th><th>時間</th><th>予約者</th><th>人数</th><th>料金</th><th>操作</th>
+  </tr></thead><tbody>${rows.map(r=>`<tr>
+    <td>${r.id}</td><td>${resStoreLabel(r)||'—'}</td><td>${r.facilityName}</td><td>${fmtDate(r.date)}</td>
+    <td>${pad(r.start)}:00〜${pad(r.end)}:00</td><td>${r.name||'—'}</td>
+    <td>${r.people?r.people+'名':'—'}</td><td>${yen(r.total||0)}</td>
+    <td><button class="mini-btn danger" onclick="admCancel('${r.id}')">取消</button></td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+async function admCancel(id){
+  if(!confirm('この予約を取り消しますか？')) return;
+  try{ await DB.deleteReservation(id); }catch(e){ toast('取消に失敗しました'); return; }
+  rmMyResId(id);
+  await refreshReservations(); renderAdminRes(); toast('予約を取り消しました');
+}
+function clearAdmFilters(){ $('admStoreFilter').value='all'; $('admDateFilter').value=''; populateFacFilter(); renderAdminRes(); }
+
+function renderAdminCal(){
+  const dEl=$('admCalDate');
+  if(!dEl.value) dEl.value=dateKey(new Date());
+  const dateK=dEl.value;
+  const store=$('admCalStore')?$('admCalStore').value:'all';
+  const facs=FACILITIES.filter(f=>store==='all'||f.storeId===store);
+  if(facs.length===0){ $('admCalGrid').innerHTML='<div class="empty">対象の施設がありません</div>'; return; }
+  const open=Math.min(...facs.map(f=>f.open));
+  const close=Math.max(...facs.map(f=>f.close));
+  const res=loadRes().filter(r=>r.date===dateK);
+  let head=`<th class="facname">施設 ＼ 時間</th>`;
+  for(let h=open;h<close;h++) head+=`<th>${pad(h)}</th>`;
+  const body=facs.map(f=>{
+    const booked={};
+    res.filter(r=>r.facilityId===f.id).forEach(r=>{ for(let h=r.start;h<r.end;h++) booked[h]=r; });
+    let cells=`<td class="facname">${f.icon} ${f.name}</td>`;
+    for(let h=open;h<close;h++){
+      if(h<f.open||h>=f.close) cells+=`<td class="closed">—</td>`;
+      else if(booked[h]) cells+=`<td class="booked" title="${(booked[h].name||'予約')} ${pad(booked[h].start)}:00〜${pad(booked[h].end)}:00 (${booked[h].id})">●</td>`;
+      else cells+=`<td class="free">空</td>`;
+    }
+    return `<tr>${cells}</tr>`;
+  }).join('');
+  $('admCalGrid').innerHTML=`<table class="cal"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+/* ---- 施設管理 ---- */
+function renderFacAdmin(){
+  $('facCount').textContent=FACILITIES.length;
+  $('facList').innerHTML=FACILITIES.slice().sort((a,b)=>(a.storeId||'').localeCompare(b.storeId||'')).map(f=>{ const st=storeById(f.storeId); return `
+    <div class="fac-row">
+      <div class="ph" style="background:${f.color}">${f.icon}</div>
+      <div class="info">
+        <h4>${f.name}</h4>
+        <div class="meta" style="color:var(--rose-dark);font-weight:600">📍 ${st.area}・${st.name}</div>
+        <div class="meta">${f.type}・定員${f.cap}名・${f.area}・${f.loc} ／ ${yen(f.price)}/時間（${f.open}:00〜${f.close}:00）</div>
+      </div>
+      <div class="acts">
+        <button class="mini-btn" onclick="openFacForm('${f.id}')">編集</button>
+        <button class="mini-btn danger" onclick="deleteFac('${f.id}')">削除</button>
+      </div>
+    </div>`; }).join('') || '<div class="empty">施設が登録されていません</div>';
+}
+function renderSwatches(){
+  $('facSwatches').innerHTML=GRADIENTS.map(g=>`<button type="button" style="background:${g}" class="${g===facSwatch?'sel':''}" onclick="selectSwatch('${g}')"></button>`).join('');
+}
+function selectSwatch(g){ facSwatch=g; renderSwatches(); }
+
+function openFacForm(id){
+  const panel=$('facFormPanel');
+  $('facStore').innerHTML=STORES.map(s=>`<option value="${s.id}">${s.area}・${s.name}</option>`).join('');
+  if(id){
+    const f=facById(id);
+    $('facFormTitle').textContent='施設を編集';
+    $('facId').value=f.id; $('facStore').value=f.storeId||STORES[0].id; $('facName').value=f.name; $('facType').value=f.type;
+    $('facCap').value=f.cap; $('facArea').value=f.area; $('facLoc').value=f.loc;
+    $('facPrice').value=f.price; $('facOpen').value=f.open; $('facClose').value=f.close;
+    $('facIcon').value=f.icon; $('facEquip').value=(f.equip||[]).join(', '); $('facDesc').value=f.desc||'';
+    facSwatch=f.color||GRADIENTS[0];
+  } else {
+    $('facFormTitle').textContent='施設を追加';
+    ['facId','facName','facCap','facArea','facLoc','facPrice','facOpen','facClose','facIcon','facEquip','facDesc'].forEach(i=>$(i).value='');
+    $('facType').value='会議室'; $('facStore').value=STORES[0].id; facSwatch=GRADIENTS[0];
+  }
+  renderSwatches();
+  panel.classList.remove('hidden');
+  panel.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function closeFacForm(){ $('facFormPanel').classList.add('hidden'); }
+
+async function saveFac(){
+  const name=$('facName').value.trim();
+  if(!name){ toast('施設名を入力してください'); return; }
+  const open=parseInt($('facOpen').value,10), close=parseInt($('facClose').value,10);
+  if(isNaN(open)||isNaN(close)||open>=close){ toast('開始時刻は終了時刻より前にしてください'); return; }
+  const equip=$('facEquip').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const id=$('facId').value;
+  const base = id ? {...facById(id)} : { id:'F'+Date.now().toString(36), rating:0, reviews:0 };
+  const fac = { ...base, name, storeId:$('facStore').value, type:$('facType').value,
+    cap:parseInt($('facCap').value,10)||1, area:$('facArea').value.trim()||'—',
+    loc:$('facLoc').value.trim()||'—', price:parseInt($('facPrice').value,10)||0,
+    open, close, icon:$('facIcon').value.trim()||'🏢', equip,
+    desc:$('facDesc').value.trim(), color:facSwatch };
+  try{ await DB.upsertFacility(fac); }catch(e){ toast('保存に失敗しました'); return; }
+  await refreshFacilities();
+  toast(id?'施設を更新しました':'施設を追加しました');
+  closeFacForm(); renderFacAdmin(); populateFacFilter();
+}
+
+async function deleteFac(id){
+  const f=facById(id);
+  if(!confirm(`「${f.name}」を削除しますか？\n今後この施設の新規予約はできなくなります（既存の予約データは残ります）。`)) return;
+  try{ await DB.deleteFacilityById(id); }catch(e){ toast('削除に失敗しました'); return; }
+  await refreshFacilities(); renderFacAdmin(); populateFacFilter(); toast('施設を削除しました');
+}
+
+/* ============ INIT ============ */
+(async function init(){
+  try{
+    DB.init();
+    if(USE_SUPABASE){
+      // メールの再設定リンクから戻るとPASSWORD_RECOVERYイベントが発火する
+      sb.auth.onAuthStateChange((event)=>{
+        if(event==='PASSWORD_RECOVERY'){ recoveryMode=true; go('admin'); renderAdmin(); }
+      });
+      await refreshAuth();
+    }
+  }catch(e){ console.warn('init:',e); }
+  await refreshFacilities();
+  await refreshReservations();
+  renderConnBanner();
+  renderFacilities();
+})();
+</script>
+</body>
+</html>
